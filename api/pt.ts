@@ -1,54 +1,47 @@
-import type { VercelRequest, VercelResponse } from "vercel";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).end();
   }
 
-  try {
-    const { history, language } = req.body;
+  const { history, language } = req.body;
 
-    if (!history || !Array.isArray(history)) {
-      return res.status(400).json({ error: "Missing history" });
+  if (!history || !Array.isArray(history)) {
+    return res.status(400).json({ error: "Missing history" });
+  }
+
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  try {
+    const stream = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      stream: true,
+      messages: [
+        {
+          role: "system",
+          content: `Du er PT Michael. Svar på ${language}.`,
+        },
+        ...history,
+      ],
+    });
+
+    for await (const chunk of stream) {
+      const token = chunk.choices[0]?.delta?.content;
+      if (token) {
+        res.write(token);
+      }
     }
 
-    const systemPrompt =
-      language === "no"
-        ? "Du er PT Michael, en erfaren personlig trener. Svar konkret, praktisk og motiverende."
-        : "You are PT Michael, an experienced personal trainer. Be concrete, practical and motivating.";
-
-    const messages = [
-      { role: "system", content: systemPrompt },
-      ...history.map((m: any) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    ];
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages,
-      max_tokens: 600,
-    });
-
-    const text =
-      completion.choices[0]?.message?.content ??
-      "No response from AI";
-
-    return res.status(200).json({ text });
-  } catch (error: any) {
-    console.error("PT ERROR:", error);
-    return res.status(500).json({
-      error: "Internal server error",
-      detail: error?.message ?? "Unknown error",
-    });
+    res.end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).end("Server error");
   }
 }
