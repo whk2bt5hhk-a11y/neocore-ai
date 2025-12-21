@@ -6,10 +6,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { prompt, language } = req.body;
+    const { history, language } = req.body;
 
-    if (!prompt) {
-      return res.status(400).json({ error: "Missing prompt" });
+    if (!history || !Array.isArray(history)) {
+      return res.status(400).json({ error: "Missing or invalid history" });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -17,10 +17,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Missing OpenAI API key" });
     }
 
-    const system =
+    const systemPrompt =
       language === "en"
-        ? "You are PT Michael, an experienced personal trainer. Be concrete and concise."
-        : "Du er PT Michael, en erfaren personlig trener. Vær konkret og kort.";
+        ? `
+You are PT Michael.
+You are an experienced personal trainer and coach.
+You give practical, direct and motivating answers.
+You focus on progression, recovery, volume, intensity and consistency.
+You never give generic motivational quotes.
+You speak like a real coach, not like a chatbot.
+`
+        : `
+Du er PT Michael.
+Du er en erfaren personlig trener og coach.
+Du gir konkrete, tydelige og motiverende svar.
+Du fokuserer på progresjon, restitusjon, volum, intensitet og konsistens.
+Du gir aldri generiske motivasjonssvar.
+Du snakker som en ekte trener, ikke som en chatbot.
+`;
+
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...history,
+    ];
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -30,11 +49,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: prompt },
-        ],
+        messages,
         max_tokens: 600,
+        temperature: 0.7,
       }),
     });
 
@@ -51,3 +68,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Server error", detail: String(e) });
   }
 }
+
