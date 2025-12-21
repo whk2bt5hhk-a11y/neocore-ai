@@ -1,5 +1,8 @@
 {
-    "dependencies": {
-      "openai": "^4.28.0"
-    }
-
+  "name": "neocore-ai",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "openai": "^4.28.0"
+  }
+}
