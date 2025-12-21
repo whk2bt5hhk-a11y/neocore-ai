@@ -1,5 +1,5 @@
 {
-  "dependencies": {
-    "openai": "^6.15.0"
-  }
-}
+    "dependencies": {
+      "openai": "^4.28.0"
+    }
+
