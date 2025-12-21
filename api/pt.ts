@@ -1,57 +1,54 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "vercel";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
   if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { history, language } = req.body;
+  try {
+    const { history, language } = req.body;
 
-  const system = `
-Du er PT Michael – en erfaren personlig trener.
+    if (!history || !Array.isArray(history)) {
+      return res.status(400).json({ error: "Missing history" });
+    }
 
-REGLER:
-- Kort, konkret, handlingsrettet
-- Maks 1 oppfølgingsspørsmål
-- Ingen smalltalk
-- Ikke si at du er AI
-- Bruk punktlister
+    const systemPrompt =
+      language === "no"
+        ? "Du er PT Michael, en erfaren personlig trener. Svar konkret, praktisk og motiverende."
+        : "You are PT Michael, an experienced personal trainer. Be concrete, practical and motivating.";
 
-Språk:
-- Norsk hvis language = "no"
-- Engelsk hvis language = "en"
-`;
-
-  res.writeHead(200, {
-    "Content-Type": "text/plain; charset=utf-8",
-    "Transfer-Encoding": "chunked",
-  });
-
-  const stream = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    stream: true,
-    messages: [
-      { role: "system", content: system },
+    const messages = [
+      { role: "system", content: systemPrompt },
       ...history.map((m: any) => ({
         role: m.role,
         content: m.content,
       })),
-    ],
-  });
+    ];
 
-  for await (const chunk of stream) {
-    const token = chunk.choices[0]?.delta?.content;
-    if (token) {
-      res.write(token);
-    }
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages,
+      max_tokens: 600,
+    });
+
+    const text =
+      completion.choices[0]?.message?.content ??
+      "No response from AI";
+
+    return res.status(200).json({ text });
+  } catch (error: any) {
+    console.error("PT ERROR:", error);
+    return res.status(500).json({
+      error: "Internal server error",
+      detail: error?.message ?? "Unknown error",
+    });
   }
-
-  res.end();
 }
-
