@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY!,
 });
 
 export default async function handler(req, res) {
@@ -9,39 +9,32 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  const { history, language } = req.body;
-
-  if (!history || !Array.isArray(history)) {
-    return res.status(400).json({ error: "Missing history" });
-  }
-
-  res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-
   try {
-    const stream = await openai.chat.completions.create({
+    const { systemPrompt } = req.body;
+
+    if (!systemPrompt) {
+      return res.status(400).json({ error: "Missing systemPrompt" });
+    }
+
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      stream: true,
+      temperature: 0.4,
       messages: [
         {
           role: "system",
-          content: `Du er PT Michael. Svar på ${language}.`,
+          content: systemPrompt,
         },
-        ...history,
       ],
     });
 
-    for await (const chunk of stream) {
-      const token = chunk.choices[0]?.delta?.content;
-      if (token) {
-        res.write(token);
-      }
-    }
+    const content = completion.choices[0]?.message?.content ?? "";
 
-    res.end();
-  } catch (err) {
-    console.error(err);
-    res.status(500).end("Server error");
+    // 🔒 Tving ren tekst (JSON)
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.status(200).send(content);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "PT generation failed" });
   }
 }
